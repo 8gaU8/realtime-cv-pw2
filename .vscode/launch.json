@@ -1,0 +1,52 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "デバッグ: ex1-2-gaussian-filtering",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/ex1-2-gaussian-filtering",
+            "args": ["${workspaceFolder}/assets/sf.png", "true", "16"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "gdb の再フォーマットを有効にする",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "逆アセンブリ フレーバーを Intel に設定",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "build-debug",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
+            "name": "デバッグ: 現在のファイル",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/${fileBasenameNoExtension}",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "gdb の再フォーマットを有効にする",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "build-current-file-debug",
+            "miDebuggerPath": "/usr/bin/gdb"
+        }
+    ]
+}

@@ -1,0 +1,53 @@
+# ignore binaries
+anaglyphMethods
+ex1-1-anaglyph
+ex1-2-gaussian-filtering
+ex1-3-denoising
+ex2-shared-memory-optim
+ex3-comparison
+
+# ignore results
+results
+
+ex1-1-anaglyph
+ex1-1
+
+/examples
+
+# Ignore all notebooks 
+*.ipynb
+
+
+
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
