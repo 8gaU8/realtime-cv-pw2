@@ -9,7 +9,7 @@ all: $(TARGETS)
 opencv-omp-average-kernel-padding: opencv-omp-average-kernel-padding.o
 	$(CXX) $< $(LDFLAGS) -o $@
 
-ex1-1-anaglyph: ex1-1-anaglyph.o anaglyphMethods.o
+ex1-1-anaglyph: ex1-1-anaglyph.o
 	$(CXX) $^ $(LDFLAGS) -o $@ 
 
 ex1-2-gaussian-filtering: ex1-2-gaussian-filtering.o

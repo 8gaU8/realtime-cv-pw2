@@ -1,0 +1,46 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build-debug",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "CXXFLAGS=-g -O3 -fopenmp `pkg-config opencv4 --cflags`",
+                "LDFLAGS=-g -O3 -fopenmp `pkg-config opencv4 --libs` -lstdc++",
+                "ex1-2-gaussian-filtering"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "build-current-file-debug",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "CXXFLAGS=-g -O3 -fopenmp `pkg-config opencv4 --cflags`",
+                "LDFLAGS=-g -O3 -fopenmp `pkg-config opencv4 --libs` -lstdc++",
+                "${fileBasenameNoExtension}"
+            ],
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "clean",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "clean"
+            ],
+            "group": "build",
+            "problemMatcher": []
+        }
+    ]
+}

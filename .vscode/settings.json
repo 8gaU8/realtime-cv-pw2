@@ -69,7 +69,9 @@
         "streambuf": "cpp",
         "thread": "cpp",
         "cinttypes": "cpp",
-        "typeinfo": "cpp"
+        "typeinfo": "cpp",
+        "cfloat": "cpp"
     },
-    "C_Cpp.errorSquiggles": "disabled"
+    "C_Cpp.errorSquiggles": "disabled",
+    "C_Cpp.dimInactiveRegions": false
 }

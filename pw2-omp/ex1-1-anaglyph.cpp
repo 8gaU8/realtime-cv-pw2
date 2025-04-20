@@ -3,30 +3,10 @@
 #include <chrono> // for high_resolution_clock
 #include <omp.h>
 
-// anaglyph declares
-#include "anaglyphMethods.hpp"
-
 using namespace std;
 
-void processImageToAnaglyph(
-    const cv::Mat_<cv::Vec3b> &source,
-    cv::Mat_<cv::Vec3b> &destination,
-    void (*anaglyphFunc)(const cv::Vec3b, const cv::Vec3b, cv::Vec3b &))
-{
-    // Process the image
-#pragma omp parallel for
-    for (int row = 0; row < source.rows; row++)
-    {
-        cv::Vec3b result;
-        for (int col = 0; col < source.cols / 2; col++)
-        {
-            int leftCol = col;
-            int rightCol = col + source.cols / 2;
-            anaglyphFunc(source(row, leftCol), source(row, rightCol), result);
-            destination(row, col) = result;
-        }
-    }
-}
+// anaglyph declares
+#include "anaglyphMethods.hpp"
 
 int main(int argc, char **argv)
 {
@@ -40,20 +20,10 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    // parse the anaglyph type
-    void (*selectedAnaglyph)(const cv::Vec3b, const cv::Vec3b, cv::Vec3b &);
+    // 関数ポインタを選択
+    const AnaglyphFunctionType selectedAnaglyph = selectAnaglyphFunction(anaglyphType);
 
-    if (strcmp(anaglyphType, "true") == 0)
-        selectedAnaglyph = &trueAnaglyph;
-    else if (strcmp(anaglyphType, "gray") == 0)
-        selectedAnaglyph = &grayAnaglyph;
-    else if (strcmp(anaglyphType, "color") == 0)
-        selectedAnaglyph = &colorAnaglyph;
-    else if (strcmp(anaglyphType, "halfColor") == 0)
-        selectedAnaglyph = &halfColorAnaglyph;
-    else if (strcmp(anaglyphType, "optimized") == 0)
-        selectedAnaglyph = &optimizedAnaglyph;
-    else
+    if (selectedAnaglyph == nullptr)
     {
         cout << "Unknown anaglyph type: " << anaglyphType << endl;
         cout << "\tanaglyphType: true, gray, color, halfColor, optimized" << endl;

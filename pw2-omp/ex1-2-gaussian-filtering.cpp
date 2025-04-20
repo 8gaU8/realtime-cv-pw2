@@ -6,22 +6,6 @@
 
 using namespace std;
 
-void processImageToAnaglyph(const cv::Mat_<cv::Vec3b> &source, cv::Mat_<cv::Vec3b> &destination, void (*anaglyphFunc)(const cv::Vec3b, const cv::Vec3b, cv::Vec3b &))
-{
-  // Process the image
-#pragma omp parallel for
-  for (int row = 0; row < source.rows; row++)
-  {
-    for (int col = 0; col < source.cols / 2; col++)
-    {
-      cv::Vec3b result;
-      int leftCol = col;
-      int rightCol = col + source.cols / 2;
-      anaglyphFunc(source(row, leftCol), source(row, rightCol), result);
-      destination(row, col) = result;
-    }
-  }
-}
 
 void gaussianKernel(int halfSize, float sigma, cv::Mat_<float> &kernelMat)
 {
@@ -81,23 +65,6 @@ int main(int argc, char **argv)
     nbThreads = atoi(argv[3]);
 
   // parse the anaglyph type
-  void (*selectedAnaglyph)(const cv::Vec3b, const cv::Vec3b, cv::Vec3b &);
-  if (strcmp(anaglyphType, "true") == 0)
-    selectedAnaglyph = &trueAnaglyph;
-  else if (strcmp(anaglyphType, "gray") == 0)
-    selectedAnaglyph = &grayAnaglyph;
-  else if (strcmp(anaglyphType, "color") == 0)
-    selectedAnaglyph = &colorAnaglyph;
-  else if (strcmp(anaglyphType, "halfColor") == 0)
-    selectedAnaglyph = &halfColorAnaglyph;
-  else if (strcmp(anaglyphType, "optimized") == 0)
-    selectedAnaglyph = &optimizedAnaglyph;
-  else
-  {
-    cout << "Unknown anaglyph type: " << anaglyphType << endl;
-    return -1;
-  }
-
   if (nbThreads != -1)
     omp_set_num_threads(nbThreads);
 
@@ -107,7 +74,7 @@ int main(int argc, char **argv)
 
   auto begin = chrono::high_resolution_clock::now();
 
-  int kernelSizeDiv2 = 7;
+  int kernelSizeDiv2 = 0;
   float sigma = 1.5;
 
   // make padded image
@@ -124,7 +91,7 @@ int main(int argc, char **argv)
   for (int it = 0; it < iter; it++)
   {
     applyGaussianFilter(paddedSource, gaussianResult, kernelSizeDiv2, kernelMat);
-    processImageToAnaglyph(gaussianResult, destination, selectedAnaglyph);
+    // processImageToAnaglyph(gaussianResult, destination, selectedAnaglyph);
   }
 
   auto end = std::chrono::high_resolution_clock::now();
