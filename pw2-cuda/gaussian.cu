@@ -49,8 +49,8 @@ __global__ void applyGaussianFilter(
         {
             for (int x = -kernelSizeDiv2; x <= kernelSizeDiv2; x++)
             {
-                int src_x = dst_x + x + kernelSizeDiv2;
-                int src_y = dst_y + y + kernelSizeDiv2;
+                int src_x = x + dst_x + kernelSizeDiv2;
+                int src_y = y + dst_y + kernelSizeDiv2;
 
                 if (src_x >= 0 && src_x < srcCol && src_y >= 0 && src_y < srcRow)
                 {
