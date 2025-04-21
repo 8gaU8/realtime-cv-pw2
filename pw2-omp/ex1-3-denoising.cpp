@@ -4,10 +4,12 @@
 #include <chrono> // for high_resolution_clock
 #include <omp.h>
 
+#include "anaglyphMethods.hpp"
+
 using namespace std;
 
 void applyDynamicGaussianFilter(
-    const cv::Mat_<cv::Vec3f> &source,
+    const cv::Mat_<cv::Vec3f> &src,
     cv::Mat_<cv::Vec3b> &destination,
     const cv::Mat_<float> &detMatrixDivGFR,
     const float gaussianFactorRatio,
@@ -17,33 +19,35 @@ void applyDynamicGaussianFilter(
     float twoPiSigmaSquare = M_PI * twoSigmaSquare;
 
 #pragma omp parallel for
-    for (int imRow = 0; imRow < source.rows; imRow++)
+    for (int imRow = 0; imRow < src.rows; imRow++)
     {
-        for (int imCol = 0; imCol < source.cols; imCol++)
+        for (int imCol = 0; imCol < src.cols; imCol++)
         {
+            int minCol = 0;
+            int maxCol = src.cols / 2 - 1;
+            if (imCol >= src.cols / 2)
+            {
+                minCol = src.cols / 2;
+                maxCol = src.cols - 1;
+            }
+
             // calculate kernel size
             float det = detMatrixDivGFR(imRow, imCol);
             det = max(det, 0.10f); // avoid division by zero
             int kernelSizeDiv2 = static_cast<int>(gaussianFactorRatio / det);
 
-            // kernelSizeDiv2 = min(kernelSizeDiv2, 1); // limit kernel size to 10
-            // kernelSizeDiv2 = max(min(kernelSizeDiv2, 1), 20); // limit kernel size to 10
-
             // dual loop for kernel
             cv::Vec3f pixelSum = cv::Vec3f(0.0, 0.0, 0.0);
             for (int kernelRow = -kernelSizeDiv2; kernelRow <= kernelSizeDiv2; kernelRow++)
             {
-                int newRow = imRow + kernelRow;
-                // consider the border
-                newRow = min(max(newRow, 0), source.rows - 1);
+                int newRow = clamp(imRow + kernelRow, 0, src.rows - 1);
                 for (int kernelCol = -kernelSizeDiv2; kernelCol <= kernelSizeDiv2; kernelCol++)
                 {
-                    int newCol = imCol + kernelCol;
-                    // consider the border
-                    newCol = min(max(newCol, 0), source.cols - 1);
+                    int newCol = clamp(imCol + kernelCol, minCol, maxCol);
+
                     float weight = exp(-(float(kernelRow * kernelRow + kernelCol * kernelCol) / twoSigmaSquare)) / twoPiSigmaSquare;
 
-                    pixelSum += source(newRow, newCol) * weight;
+                    pixelSum += src(newRow, newCol) * weight;
                 }
             }
             destination(imRow, imCol) = pixelSum;
@@ -52,16 +56,16 @@ void applyDynamicGaussianFilter(
 }
 
 void calcDetCovarianceMatrix(
-    const cv::Mat_<cv::Vec3f> &paddedSource,
+    const cv::Mat_<cv::Vec3f> &paddedSrc,
     cv::Mat_<float> &detMatrix,
     const int neighborSizeDiv2)
 {
     int squareNeighborSize = ((2 * neighborSizeDiv2 + 1) * (2 * neighborSizeDiv2 + 1));
 
 #pragma omp parallel for
-    for (int imRow = neighborSizeDiv2; imRow < paddedSource.rows - neighborSizeDiv2; imRow++)
+    for (int imRow = neighborSizeDiv2; imRow < paddedSrc.rows - neighborSizeDiv2; imRow++)
     {
-        for (int imCol = neighborSizeDiv2; imCol < paddedSource.cols - neighborSizeDiv2; imCol++)
+        for (int imCol = neighborSizeDiv2; imCol < paddedSrc.cols - neighborSizeDiv2; imCol++)
         {
             // ーーーーーーーーーーーーーーーーーー
             // 1. calculate mean
@@ -72,7 +76,7 @@ void calcDetCovarianceMatrix(
                 for (int kernelCol = -neighborSizeDiv2; kernelCol <= neighborSizeDiv2; kernelCol++)
                 {
                     int newCol = imCol + kernelCol;
-                    rgbMean += paddedSource(newRow, newCol);
+                    rgbMean += paddedSrc(newRow, newCol);
                 }
             }
 
@@ -93,7 +97,7 @@ void calcDetCovarianceMatrix(
                 {
                     int newCol = imCol + kernelCol;
                     // pixel-wise diff between pixel-value(RGB) and mean
-                    diff = paddedSource(newRow, newCol) - rgbMean;
+                    diff = paddedSrc(newRow, newCol) - rgbMean;
                     Sbb += diff(0) * diff(0);
                     Sbg += diff(0) * diff(1);
                     Sbr += diff(0) * diff(2);
@@ -105,7 +109,9 @@ void calcDetCovarianceMatrix(
 
             // 3. calculate determinant
             float det = (Sbb * Sgg * Srr) + 2 * (Sbg * Sbr * Sgr) - (Sbb * Sgr * Sgr + Sgg * Sbr * Sbr + Srr * Sbg * Sbg);
-            det /= squareNeighborSize * squareNeighborSize * squareNeighborSize;
+            // Theoritically, determinant should be divided by the number of pixels
+            // but it is not necessary since we have `gaussianFactorRatio` parameter
+            // det /= squareNeighborSize * squareNeighborSize * squareNeighborSize;
 
             // 5. store determinant
             detMatrix(imRow - neighborSizeDiv2, imCol - neighborSizeDiv2) = det;
@@ -115,57 +121,63 @@ void calcDetCovarianceMatrix(
     // min-max scaling
     double minVal, maxVal;
     cv::Point minLoc, maxLoc;
-    cv::minMaxLoc(detMatrix, &minVal, &maxVal, &minLoc, &maxLoc);
-    cout << "minVal: " << minVal << endl;
-    cout << "maxVal: " << maxVal << endl;
+    cv::minMaxLoc(detMatrix, &minVal, &maxVal, nullptr, nullptr);
 
     detMatrix = (detMatrix - minVal) / (maxVal - minVal);
-    // calculate mean value
-    // cv::Scalar mean = cv::mean(detMatrix);
-    // cout << "mean: " << mean[0] << endl;
 }
 
 int main(int argc, char **argv)
 {
-    if (argc < 5)
+    // parse the arguments
+    if (argc < 6)
     {
-        cout << "Usage: " << argv[0] << " <image> <neighborSizeDiv2> <gaussianFactorRatio> <[nbThreads]>" << endl;
+        cout << "Usage: " << argv[0] << " <image> <anaglyphType> <neighborSizeDiv2> <gaussianFactorRatio> <sigma>" << endl;
+        cout << "anaglyphType: true, gray, color, halfColor, optimized" << endl;
         return -1;
     }
 
     char *filename = argv[1];
-    int neighborSizeDiv2 = atoi(argv[2]);
-    float gaussianFactorRatio = atof(argv[3]);
-    float sigma = atof(argv[4]);
+    const char *anaglyphType = argv[2];
+    int neighborSizeDiv2 = atoi(argv[3]);
+    float gaussianFactorRatio = atof(argv[4]);
+    float sigma = atof(argv[5]);
+
+    const AnaglyphFunction selectedAnaglyph = selectAnaglyphFunction(anaglyphType);
+
+    if (selectedAnaglyph == nullptr)
+    {
+        cout << "Invalid anaglyph type: " << anaglyphType << endl;
+        cout << "anaglyphType: true, gray, color, halfColor, optimized" << endl;
+        return -1;
+    }
 
     int nbThreads = -1;
-    if (argc == 6)
-        nbThreads = atoi(argv[5]);
+    if (argc == 7)
+        nbThreads = atoi(argv[6]);
 
     if (nbThreads != -1)
         omp_set_num_threads(nbThreads);
 
-    cout << "ARGS:" << endl;
-    cout << "ARGC:" << argc << endl;
-    cout << "filename: " << filename << endl;
-    cout << "neighborSizeDiv2: " << neighborSizeDiv2 << endl;
-    cout << "gaussianFactorRatio: " << gaussianFactorRatio << endl;
-    cout << "sigma: " << sigma << endl;
-    cout << "nbThreads: " << nbThreads << endl;
-    cout << "----------------------------------------" << endl;
+    cout << "             Filename: " << filename << endl;
+    cout << "             Anaglyph: " << anaglyphType << endl;
+    cout << "        Neighbor size: " << neighborSizeDiv2 << endl;
+    cout << "Gaussian factor ratio: " << gaussianFactorRatio << endl;
+    cout << "                Sigma: " << sigma << endl;
 
-    const cv::Mat_<cv::Vec3f> source = cv::imread(filename, cv::IMREAD_COLOR);
+    // --------------------------------------
 
-    cv::Mat_<float> detMatrix(source.rows, source.cols);
+    // load image
+    const cv::Mat_<cv::Vec3f> src = cv::imread(filename, cv::IMREAD_COLOR);
+
+    cv::Mat_<float> detMatrix(src.rows, src.cols);
 
     // make padded image
     // use `same` padding
-    cv::Mat_<cv::Vec3f> paddedSource = cv::Mat_<cv::Vec3f>(source.rows + 2 * neighborSizeDiv2, source.cols + 2 * neighborSizeDiv2);
-    cv::copyMakeBorder(source, paddedSource, neighborSizeDiv2, neighborSizeDiv2, neighborSizeDiv2, neighborSizeDiv2, cv::BORDER_REPLICATE);
+    cv::Mat_<cv::Vec3f> paddedSrc = cv::Mat_<cv::Vec3f>(src.rows + 2 * neighborSizeDiv2, src.cols + 2 * neighborSizeDiv2);
+    cv::copyMakeBorder(src, paddedSrc, neighborSizeDiv2, neighborSizeDiv2, neighborSizeDiv2, neighborSizeDiv2, cv::BORDER_REPLICATE);
 
-    cv::Mat_<cv::Vec3b> destination = cv::Mat_<cv::Vec3b>(source.rows, source.cols);
-
-    int kernelSizeDiv2;
+    cv::Mat_<cv::Vec3b> gaussian = cv::Mat_<cv::Vec3b>(src.rows, src.cols);
+    cv::Mat_<cv::Vec3b> anaglyph = cv::Mat_<cv::Vec3b>(src.rows, src.cols / 2);
 
     auto begin = chrono::high_resolution_clock::now();
 
@@ -175,10 +187,13 @@ int main(int argc, char **argv)
     {
 
         // calculate determinant of covariance matrix
-        calcDetCovarianceMatrix(paddedSource, detMatrix, neighborSizeDiv2);
+        calcDetCovarianceMatrix(paddedSrc, detMatrix, neighborSizeDiv2);
 
         // calculate gaussian
-        applyDynamicGaussianFilter(source, destination, detMatrix, gaussianFactorRatio, sigma);
+        applyDynamicGaussianFilter(src, gaussian, detMatrix, gaussianFactorRatio, sigma);
+
+        // apply anaglyph
+        processImageToAnaglyph(gaussian, anaglyph, selectedAnaglyph);
     }
 
     auto end = std::chrono::high_resolution_clock::now();
@@ -188,11 +203,9 @@ int main(int argc, char **argv)
     cout << "Time for 1 iteration: " << diff.count() / iter << " s" << endl;
     cout << "IPS: " << iter / diff.count() << endl;
 
-    cv::Mat_<cv::Vec3b> destinationUchar;
-    destination.convertTo(destinationUchar, CV_8UC3);
-    cv::imwrite("results/image_original.png", source);
+    cv::imwrite("results/image_original.png", src);
     cv::imwrite("results/image_det.png", detMatrix * 255);
-    cv::imwrite("results/image_denoised.png", destinationUchar);
+    cv::imwrite("results/image_anaglyph.png", anaglyph);
 
     return 0;
 }

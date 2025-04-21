@@ -21,7 +21,7 @@ int main(int argc, char **argv)
     }
 
     // 関数ポインタを選択
-    const AnaglyphFunctionType selectedAnaglyph = selectAnaglyphFunction(anaglyphType);
+    const AnaglyphFunction selectedAnaglyph = selectAnaglyphFunction(anaglyphType);
 
     if (selectedAnaglyph == nullptr)
     {

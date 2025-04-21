@@ -3,7 +3,7 @@
 
 #include <opencv2/opencv.hpp>
 
-using AnaglyphFunctionType = void (*)(const cv::Vec3b, const cv::Vec3b, cv::Vec3b &);
+using AnaglyphFunction = void (*)(const cv::Vec3b, const cv::Vec3b, cv::Vec3b &);
 
 void trueAnaglyph(const cv::Vec3b left, const cv::Vec3b right, cv::Vec3b &result)
 {
@@ -57,7 +57,7 @@ void optimizedAnaglyph(const cv::Vec3b left, const cv::Vec3b right, cv::Vec3b &r
 }
 
 // select the anaglyph function based on the type
-AnaglyphFunctionType selectAnaglyphFunction(const char *anaglyphType)
+AnaglyphFunction selectAnaglyphFunction(const char *anaglyphType)
 {
     if (strcmp(anaglyphType, "true") == 0)
         return &trueAnaglyph;
@@ -77,7 +77,7 @@ AnaglyphFunctionType selectAnaglyphFunction(const char *anaglyphType)
 void processImageToAnaglyph(
     const cv::Mat_<cv::Vec3b> &source,
     cv::Mat_<cv::Vec3b> &destination,
-    const AnaglyphFunctionType anaglyphFunction)
+    const AnaglyphFunction anaglyphFunction)
 {
     // Process the image
 #pragma omp parallel for

@@ -18,7 +18,7 @@ inline int divUp(int a, int b)
     return ((a % b) != 0) ? (a / b + 1) : (a / b);
 }
 
-void processCUDA(cv::cuda::GpuMat &src, cv::cuda::GpuMat &dst, const AnaglyphFuncion &selectedAnaglyph)
+void processCUDA(cv::cuda::GpuMat &src, cv::cuda::GpuMat &dst, const AnaglyphFunction &selectedAnaglyph)
 {
     const dim3 block(32, 8);
     const dim3 grid(divUp(dst.cols, block.x), divUp(dst.rows, block.y));
@@ -40,7 +40,7 @@ int main(int argc, char **argv)
 
     const char *filename = argv[1];
     const char *anaglyphType = argv[2];
-    const AnaglyphFuncion selectedAnaglyph = selectAnaglyphFunction(anaglyphType);
+    const AnaglyphFunction selectedAnaglyph = selectAnaglyphFunction(anaglyphType);
 
     if (selectedAnaglyph == nullptr)
     {

@@ -6,8 +6,9 @@
 
 using namespace std;
 
+#include "anaglyphMethods.hpp"
 
-void gaussianKernel(int halfSize, float sigma, cv::Mat_<float> &kernelMat)
+void makeGaussianKernel(int halfSize, float sigma, cv::Mat_<float> &kernelMat)
 {
   for (int i = 0; i < 2 * halfSize + 1; i++)
   {
@@ -21,52 +22,77 @@ void gaussianKernel(int halfSize, float sigma, cv::Mat_<float> &kernelMat)
 }
 
 void applyGaussianFilter(
-    const cv::Mat_<cv::Vec3b> &paddedSource,
-    cv::Mat_<cv::Vec3b> &destination,
+    const cv::Mat_<cv::Vec3b> &src,
+    cv::Mat_<cv::Vec3b> &dst,
     const int kernelSizeDiv2,
     const cv::Mat_<float> &kernelMat)
 {
+
 #pragma omp parallel for
-  for (int imRow = kernelSizeDiv2; imRow < paddedSource.rows - kernelSizeDiv2; imRow++)
+
+  for (int y = 0; y < src.rows; y++)
   {
     cv::Vec3f pixelSum;
-    for (int imCol = kernelSizeDiv2; imCol < paddedSource.cols - kernelSizeDiv2; imCol++)
+    for (int x = 0; x < src.cols; x++)
     {
+
+      int minCol = 0;
+      int maxCol = src.cols / 2 - 1;
+      if (x >= src.cols / 2)
+      {
+        minCol = src.cols / 2;
+        maxCol = src.cols - 1;
+      }
+
       // dual loop for kernel
       pixelSum = cv::Vec3f(0.0);
       for (int kernelRow = -kernelSizeDiv2; kernelRow <= kernelSizeDiv2; kernelRow++)
       {
-        int newRow = imRow + kernelRow;
+        int src_y = clamp(y + kernelRow, 0, src.rows - 1);
+
         for (int kernelCol = -kernelSizeDiv2; kernelCol <= kernelSizeDiv2; kernelCol++)
         {
-          int newCol = imCol + kernelCol;
-          float k = kernelMat(kernelRow + kernelSizeDiv2, kernelCol + kernelSizeDiv2);
-          pixelSum += k * paddedSource(newRow, newCol);
+          int src_x = clamp(x + kernelCol, minCol, maxCol);
+
+          float weight = kernelMat(kernelRow + kernelSizeDiv2, kernelCol + kernelSizeDiv2);
+          pixelSum += src(src_y, src_x) * weight;
         }
       }
-      destination(imRow - kernelSizeDiv2, imCol - kernelSizeDiv2) = pixelSum;
+      dst(y, x) = pixelSum;
     }
   }
 }
 
 int main(int argc, char **argv)
 {
-  char *filename = argv[1];
-  char *anaglyphType = argv[2];
-  int nbThreads = -1;
 
-  if (argc < 3)
+  if (argc < 5)
   {
-    cout << "Usage: " << argv[0] << " <image> <anaglyphType> <[nbThreads]>" << endl;
+    cout << "Usage: " << argv[0] << " <image> <anaglyphType> <kernelSizeDiv2> <sigma> <[nbThreads]>" << endl;
     cout << "\tanaglyphType: true, gray, color, halfColor, optimized" << endl;
     return -1;
   }
-  else if (argc == 4)
-    nbThreads = atoi(argv[3]);
+  char *filename = argv[1];
+  char *anaglyphType = argv[2];
+  int kernelSizeDiv2 = atoi(argv[3]);
+  float sigma = atof(argv[4]);
 
-  // parse the anaglyph type
+  int nbThreads = -1;
+  if (argc == 6)
+    nbThreads = atoi(argv[5]);
+
   if (nbThreads != -1)
     omp_set_num_threads(nbThreads);
+
+  // parse the anaglyph type
+  const AnaglyphFunction selectedAnaglyph = selectAnaglyphFunction(anaglyphType);
+
+  if (selectedAnaglyph == nullptr)
+  {
+    cout << "Invalid anaglyph type: " << anaglyphType << endl;
+    cout << "anaglyphType: true, gray, color, halfColor, optimized" << endl;
+    return -1;
+  }
 
   cv::Mat_<cv::Vec3b> source = cv::imread(filename, cv::IMREAD_COLOR);
   cv::Mat_<cv::Vec3b> gaussianResult(source.rows, source.cols);
@@ -74,24 +100,18 @@ int main(int argc, char **argv)
 
   auto begin = chrono::high_resolution_clock::now();
 
-  int kernelSizeDiv2 = 0;
-  float sigma = 1.5;
-
-  // make padded image
-  cv::Mat_<cv::Vec3b> paddedSource = cv::Mat_<cv::Vec3b>(source.rows + 2 * kernelSizeDiv2, source.cols + 2 * kernelSizeDiv2);
-  // use `same` padding
-  cv::copyMakeBorder(source, paddedSource, kernelSizeDiv2, kernelSizeDiv2, kernelSizeDiv2, kernelSizeDiv2, cv::BORDER_REPLICATE);
-
   // make gaussian kernel
   cv::Mat_<float> kernelMat(kernelSizeDiv2 * 2 + 1, kernelSizeDiv2 * 2 + 1);
-  gaussianKernel(kernelSizeDiv2, sigma, kernelMat);
+  makeGaussianKernel(kernelSizeDiv2, sigma, kernelMat);
 
   // Iteration for benchmarking
   const int iter = 10;
   for (int it = 0; it < iter; it++)
   {
-    applyGaussianFilter(paddedSource, gaussianResult, kernelSizeDiv2, kernelMat);
-    // processImageToAnaglyph(gaussianResult, destination, selectedAnaglyph);
+    cout << "Processing image with Gaussian filter..." << endl;
+    applyGaussianFilter(source, gaussianResult, kernelSizeDiv2, kernelMat);
+    cout << "Processing image to anaglyph..." << endl;
+    processImageToAnaglyph(gaussianResult, destination, selectedAnaglyph);
   }
 
   auto end = std::chrono::high_resolution_clock::now();

@@ -12,7 +12,7 @@
 #include <opencv2/core/cuda/vec_traits.hpp>
 #include <opencv2/core/cuda/vec_math.hpp>
 
-using AnaglyphFuncion = void (*)(const cv::cuda::PtrStep<uchar3>, cv::cuda::PtrStep<uchar3>, int, int);
+using AnaglyphFunction = void (*)(const cv::cuda::PtrStep<uchar3>, cv::cuda::PtrStep<uchar3>, int, int);
 
 // ======== ANAGLYPH FUNCTIONS ========
 __global__ void trueAnaglyph(const cv::cuda::PtrStep<uchar3> src, cv::cuda::PtrStep<uchar3> dst, int rows, int cols)
@@ -125,7 +125,7 @@ __global__ void optimizedAnaglyph(const cv::cuda::PtrStep<uchar3> src, cv::cuda:
 // anaglyph functions end
 
 // parse anaglyph type
-AnaglyphFuncion selectAnaglyphFunction(const char *anaglyphType)
+AnaglyphFunction selectAnaglyphFunction(const char *anaglyphType)
 {
     if (strcmp(anaglyphType, "true") == 0)
         return &trueAnaglyph;
