@@ -9,10 +9,9 @@
 #include <opencv2/core/cuda/vec_traits.hpp>
 #include <opencv2/core/cuda/vec_math.hpp>
 
-// #include "helper_math.h"
-#include "anaglyphMethods.cuh"
-
 using namespace std;
+
+#include "anaglyphMethods.cuh"
 
 inline int divUp(int a, int b)
 {
@@ -31,8 +30,6 @@ void processCUDA(cv::cuda::GpuMat &src, cv::cuda::GpuMat &dst, const AnaglyphFun
 
 int main(int argc, char **argv)
 {
-    const char *filename = argv[1];
-    const char *anaglyphType = argv[2];
 
     if (argc < 3)
     {
@@ -41,7 +38,16 @@ int main(int argc, char **argv)
         return -1;
     }
 
+    const char *filename = argv[1];
+    const char *anaglyphType = argv[2];
     const AnaglyphFuncion selectedAnaglyph = selectAnaglyphFunction(anaglyphType);
+
+    if (selectedAnaglyph == nullptr)
+    {
+        cout << "Invalid anaglyph type: " << anaglyphType << endl;
+        cout << "anaglyphType: true, gray, color, halfColor, optimized" << endl;
+        return -1;
+    }
 
     cv::Mat h_src = cv::imread(filename, cv::IMREAD_COLOR);
     cv::Mat h_dst;

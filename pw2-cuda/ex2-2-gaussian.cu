@@ -12,6 +12,7 @@
 #include <opencv2/core/cuda/vec_math.hpp>
 
 #include "helper_math.h"
+#include "anaglyphMethods.cuh"
 
 using namespace std;
 
@@ -39,30 +40,33 @@ __global__ void applyGaussianFilter(
 {
     const int dst_x = blockDim.x * blockIdx.x + threadIdx.x;
     const int dst_y = blockDim.y * blockIdx.y + threadIdx.y;
-    const int srcCol = cols+ kernelSizeDiv2 * 2;
-    const int srcRow = rows+ kernelSizeDiv2 * 2;
+    int minCol = 0;
+    int maxCol = cols / 2 - 1;
+    if (dst_x >= cols / 2)
+    {
+        minCol = cols / 2;
+        maxCol = cols - 1;
+    }
 
-    if (dst_x < cols && dst_y < rows)
+    if (dst_y < rows && dst_x < cols)
     {
         float3 sum = make_float3(0.0f);
+
         for (int y = -kernelSizeDiv2; y <= kernelSizeDiv2; y++)
         {
             for (int x = -kernelSizeDiv2; x <= kernelSizeDiv2; x++)
             {
-                int src_x = x + dst_x + kernelSizeDiv2;
-                int src_y = y + dst_y + kernelSizeDiv2;
+                int src_x = clamp(x + dst_x, minCol, maxCol);
 
-                if (src_x >= 0 && src_x < srcCol && src_y >= 0 && src_y < srcRow)
-                {
-                    uchar3 pixel = src(src_y, src_x);
-                    float weight = kernelMat(y, x);
+                uchar3 pixel = src(src_y, src_x);
+                float weight = kernelMat(y + kernelSizeDiv2, x + kernelSizeDiv2);
 
-                    sum.x += pixel.x * weight;
-                    sum.y += pixel.y * weight;
-                    sum.z += pixel.z * weight;
-                }
+                sum.x += pixel.x * weight;
+                sum.y += pixel.y * weight;
+                sum.z += pixel.z * weight;
             }
         }
+
         dst(dst_y, dst_x).x = min(max(int(sum.x), 0), 255);
         dst(dst_y, dst_x).y = min(max(int(sum.y), 0), 255);
         dst(dst_y, dst_x).z = min(max(int(sum.z), 0), 255);
@@ -74,7 +78,7 @@ inline int divUp(int a, int b)
     return ((a % b) != 0) ? (a / b + 1) : (a / b);
 }
 
-void processCUDA(
+void processGaussianCUDA(
     const cv::cuda::GpuMat &src,
     cv::cuda::GpuMat &dst,
     const int kernelSizeDiv2,
@@ -90,8 +94,15 @@ void processCUDA(
         dst.rows,
         dst.cols,
         kernelSizeDiv2,
-        cv::cuda::PtrStep<float>(kernelMat) // Pass the kernel matrix to the kernel
-    );
+        cv::cuda::PtrStep<float>(kernelMat));
+}
+
+void processAnaglyphCUDA(cv::cuda::GpuMat &src, cv::cuda::GpuMat &dst, const AnaglyphFuncion &selectedAnaglyph)
+{
+    const dim3 block(32, 8);
+    const dim3 grid(divUp(dst.cols, block.x), divUp(dst.rows, block.y));
+
+    selectedAnaglyph<<<grid, block>>>(src, dst, dst.rows, dst.cols);
 }
 
 // ------------------------------
@@ -99,47 +110,46 @@ void processCUDA(
 int main(int argc, char **argv)
 {
 
-    if (argc < 4)
+    if (argc < 5)
     {
-        cout << "Usage: " << argv[0] << " <image> <kernelSizeDiv2> <sigma>" << endl;
+        cout << "Usage: " << argv[0] << " <image> <anaglyphType> <kernelSizeDiv2> <sigma>" << endl;
+        cout << "anaglyphType: true, gray, color, halfColor, optimized" << endl;
         return -1;
     }
 
     // parse arguments
     const char *filename = argv[1];
-    const int kernelSizeDiv2 = atoi(argv[2]);
-    const float sigma = atof(argv[3]);
+    const char *anaglyphType = argv[2];
+    const int kernelSizeDiv2 = atoi(argv[3]);
+    const float sigma = atof(argv[4]);
 
     cout << "   Filename: " << filename << endl;
+    cout << "   Anaglyph: " << anaglyphType << endl;
     cout << "Kernel size: " << kernelSizeDiv2 << endl;
     cout << "      Sigma: " << sigma << endl;
 
+    const AnaglyphFuncion selectedAnaglyph = selectAnaglyphFunction(anaglyphType);
+
+    if (selectedAnaglyph == nullptr)
+    {
+        cout << "Invalid anaglyph type: " << anaglyphType << endl;
+        cout << "anaglyphType: true, gray, color, halfColor, optimized" << endl;
+        return -1;
+    }
+
     const cv::Mat h_src = cv::imread(filename, cv::IMREAD_COLOR);
     cv::Mat h_dst;
-    h_dst.create(h_src.rows, h_src.cols, CV_8UC3);
-
-    // make padded image
-    cv::Mat h_paddedSource;
-    h_paddedSource.create(h_src.rows + 2 * kernelSizeDiv2, h_src.cols + 2 * kernelSizeDiv2, CV_8UC3);
-    // use `same` padding
-    cv::copyMakeBorder(h_src, h_paddedSource, kernelSizeDiv2, kernelSizeDiv2, kernelSizeDiv2, kernelSizeDiv2, cv::BORDER_REPLICATE);
+    h_dst.create(h_src.rows, h_src.cols / 2, CV_8UC3);
 
     // gaussian kernel
     cv::Mat_<float> k_kernelMat(2 * kernelSizeDiv2 + 1, 2 * kernelSizeDiv2 + 1);
     makeGaussianKernel(kernelSizeDiv2, sigma, k_kernelMat);
 
-    cout << "Kernel: " << endl;
-    float sum = 0;
-    for (int i = 0; i < k_kernelMat.rows; i++)
-        for (int j = 0; j < k_kernelMat.cols; j++)
-            sum += k_kernelMat(i, j);
-    cout << "Sum: " << sum << endl;
-
     // upload kernel to GPU
     cv::cuda::GpuMat d_kernelMat;
     d_kernelMat.upload(k_kernelMat);
 
-    cv::cuda::GpuMat d_src, d_dst;
+    cv::cuda::GpuMat d_src, d_mid, d_dst;
 
     auto begin = chrono::high_resolution_clock::now();
     const int iter = 100;
@@ -147,10 +157,12 @@ int main(int argc, char **argv)
     for (int i = 0; i < iter; i++)
     {
         // upload source and destination images
-        d_src.upload(h_paddedSource);
+        d_src.upload(h_src);
+        d_mid.upload(h_src);
         d_dst.upload(h_dst);
         // process
-        processCUDA(d_src, d_dst, kernelSizeDiv2, d_kernelMat);
+        processGaussianCUDA(d_src, d_mid, kernelSizeDiv2, d_kernelMat);
+        processAnaglyphCUDA(d_mid, d_dst, selectedAnaglyph);
         // download destination image
         d_dst.download(h_dst);
     }

@@ -1,4 +1,4 @@
-#ifdef ANAGLYPHMETHODS_CUH
+#ifndef ANAGLYPHMETHODS_CUH
 #define ANAGLYPHMETHODS_CUH
 
 #include <iostream>
@@ -29,9 +29,10 @@ __global__ void trueAnaglyph(const cv::cuda::PtrStep<uchar3> src, cv::cuda::PtrS
         uchar3 left = src(dst_y, left_x);
         uchar3 right = src(dst_y, right_x);
 
-        dst(dst_y, dst_x).x = 0.299 * left.x + 0.587 * left.y + 0.114 * left.z;
+        // z,y,x = r,g,b
+        dst(dst_y, dst_x).z = 0.299 * left.z + 0.587 * left.y + 0.114 * left.x;
         dst(dst_y, dst_x).y = 0.0;
-        dst(dst_y, dst_x).z = 0.299 * right.x + 0.587 * right.y + 0.114 * right.z;
+        dst(dst_y, dst_x).x = 0.299 * right.z + 0.587 * right.y + 0.114 * right.x;
     }
 }
 
@@ -49,12 +50,13 @@ __global__ void grayAnaglyph(const cv::cuda::PtrStep<uchar3> src, cv::cuda::PtrS
         uchar3 left = src(dst_y, left_x);
         uchar3 right = src(dst_y, right_x);
 
-        uchar gray_left = 0.299 * left.x + 0.587 * left.y + 0.114 * left.z;
-        uchar gray_right = 0.299 * right.x + 0.587 * right.y + 0.114 * right.z;
+        // z,y,x = r,g,b
+        uchar gray_left = 0.299 * left.z + 0.587 * left.y + 0.114 * left.x;
+        uchar gray_right = 0.299 * right.z + 0.587 * right.y + 0.114 * right.x;
 
-        dst(dst_y, dst_x).x = gray_left;
-        dst(dst_y, dst_x).y = gray_left;
-        dst(dst_y, dst_x).z = gray_right;
+        dst(dst_y, dst_x).z = gray_left;
+        dst(dst_y, dst_x).y = gray_right;
+        dst(dst_y, dst_x).x = gray_right;
     }
 }
 
@@ -72,9 +74,10 @@ __global__ void colorAnaglyph(const cv::cuda::PtrStep<uchar3> src, cv::cuda::Ptr
         uchar3 left = src(dst_y, left_x);
         uchar3 right = src(dst_y, right_x);
 
-        dst(dst_y, dst_x).x = left.x;
-        dst(dst_y, dst_x).y = left.y;
-        dst(dst_y, dst_x).z = right.z;
+        // z,y,x = r,g,b
+        dst(dst_y, dst_x).z = left.z;
+        dst(dst_y, dst_x).y = right.y;
+        dst(dst_y, dst_x).x = right.x;
     }
 }
 
@@ -92,9 +95,10 @@ __global__ void halfColorAnaglyph(const cv::cuda::PtrStep<uchar3> src, cv::cuda:
         uchar3 left = src(dst_y, left_x);
         uchar3 right = src(dst_y, right_x);
 
-        dst(dst_y, dst_x).x = 0.299 * left.x + 0.587 * left.y + 0.114 * left.z;
-        dst(dst_y, dst_x).y = left.y;
-        dst(dst_y, dst_x).z = right.z;
+        // z,y,x = r,g,b
+        dst(dst_y, dst_x).z = 0.299 * left.z + 0.587 * left.y + 0.114 * left.x;
+        dst(dst_y, dst_x).y = right.y;
+        dst(dst_y, dst_x).x = right.x;
     }
 }
 
@@ -112,9 +116,10 @@ __global__ void optimizedAnaglyph(const cv::cuda::PtrStep<uchar3> src, cv::cuda:
         uchar3 left = src(dst_y, left_x);
         uchar3 right = src(dst_y, right_x);
 
-        dst(dst_y, dst_x).x = 0.7 * left.x + 0.3 * left.y;
-        dst(dst_y, dst_x).y = left.y;
-        dst(dst_y, dst_x).z = right.z;
+        // z,y,x = r,g,b
+        dst(dst_y, dst_x).z = 0.7 * left.y + 0.3 * left.x;
+        dst(dst_y, dst_x).y = right.y;
+        dst(dst_y, dst_x).x = right.x;
     }
 }
 // anaglyph functions end
