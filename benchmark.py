@@ -26,7 +26,8 @@ def main():
     neighbor_size_div2_grid = ["1", "4", "8", "16"]
 
     # omp params
-    nb_threads_grid = ["1", "4", "8", "16", "32", "64", "-1"]
+    nb_threads_grid = [str(i) for i in range(2, 65, 2)]
+    nb_threads_grid.append("-1")
 
     # cuda params
     blockDimX_grid = ["1", "2", "4", "8", "16", "32", "64"]
