@@ -13,9 +13,140 @@
 #include <opencv2/cudaarithm.hpp>
 
 #include "helper_math.h"
-#include "anaglyphMethods.cuh"
 
 using namespace std;
+
+// Anaglyph declarations
+// =========================================================
+using AnaglyphFunction = void (*)(const cv::cuda::PtrStep<uchar3>, cv::cuda::PtrStep<uchar3>, int, int);
+
+__global__ void trueAnaglyph(const cv::cuda::PtrStep<uchar3> src, cv::cuda::PtrStep<uchar3> dst, int rows, int cols)
+{
+
+    const int dst_x = blockDim.x * blockIdx.x + threadIdx.x;
+    const int dst_y = blockDim.y * blockIdx.y + threadIdx.y;
+
+    const int left_x = dst_x;
+    const int right_x = dst_x + cols;
+
+    if (dst_x < cols && dst_y < rows)
+    {
+        uchar3 left = src(dst_y, left_x);
+        uchar3 right = src(dst_y, right_x);
+
+        // z,y,x = r,g,b
+        dst(dst_y, dst_x).z = 0.299 * left.z + 0.587 * left.y + 0.114 * left.x;
+        dst(dst_y, dst_x).y = 0.0;
+        dst(dst_y, dst_x).x = 0.299 * right.z + 0.587 * right.y + 0.114 * right.x;
+    }
+}
+
+__global__ void grayAnaglyph(const cv::cuda::PtrStep<uchar3> src, cv::cuda::PtrStep<uchar3> dst, int rows, int cols)
+{
+
+    const int dst_x = blockDim.x * blockIdx.x + threadIdx.x;
+    const int dst_y = blockDim.y * blockIdx.y + threadIdx.y;
+
+    const int left_x = dst_x;
+    const int right_x = dst_x + cols;
+
+    if (dst_x < cols && dst_y < rows)
+    {
+        uchar3 left = src(dst_y, left_x);
+        uchar3 right = src(dst_y, right_x);
+
+        // z,y,x = r,g,b
+        uchar gray_left = 0.299 * left.z + 0.587 * left.y + 0.114 * left.x;
+        uchar gray_right = 0.299 * right.z + 0.587 * right.y + 0.114 * right.x;
+
+        dst(dst_y, dst_x).z = gray_left;
+        dst(dst_y, dst_x).y = gray_right;
+        dst(dst_y, dst_x).x = gray_right;
+    }
+}
+
+__global__ void colorAnaglyph(const cv::cuda::PtrStep<uchar3> src, cv::cuda::PtrStep<uchar3> dst, int rows, int cols)
+{
+
+    const int dst_x = blockDim.x * blockIdx.x + threadIdx.x;
+    const int dst_y = blockDim.y * blockIdx.y + threadIdx.y;
+
+    const int left_x = dst_x;
+    const int right_x = dst_x + cols;
+
+    if (dst_x < cols && dst_y < rows)
+    {
+        uchar3 left = src(dst_y, left_x);
+        uchar3 right = src(dst_y, right_x);
+
+        // z,y,x = r,g,b
+        dst(dst_y, dst_x).z = left.z;
+        dst(dst_y, dst_x).y = right.y;
+        dst(dst_y, dst_x).x = right.x;
+    }
+}
+
+__global__ void halfColorAnaglyph(const cv::cuda::PtrStep<uchar3> src, cv::cuda::PtrStep<uchar3> dst, int rows, int cols)
+{
+
+    const int dst_x = blockDim.x * blockIdx.x + threadIdx.x;
+    const int dst_y = blockDim.y * blockIdx.y + threadIdx.y;
+
+    const int left_x = dst_x;
+    const int right_x = dst_x + cols;
+
+    if (dst_x < cols && dst_y < rows)
+    {
+        uchar3 left = src(dst_y, left_x);
+        uchar3 right = src(dst_y, right_x);
+
+        // z,y,x = r,g,b
+        dst(dst_y, dst_x).z = 0.299 * left.z + 0.587 * left.y + 0.114 * left.x;
+        dst(dst_y, dst_x).y = right.y;
+        dst(dst_y, dst_x).x = right.x;
+    }
+}
+
+__global__ void optimizedAnaglyph(const cv::cuda::PtrStep<uchar3> src, cv::cuda::PtrStep<uchar3> dst, int rows, int cols)
+{
+
+    const int dst_x = blockDim.x * blockIdx.x + threadIdx.x;
+    const int dst_y = blockDim.y * blockIdx.y + threadIdx.y;
+
+    const int left_x = dst_x;
+    const int right_x = dst_x + cols;
+
+    if (dst_x < cols && dst_y < rows)
+    {
+        uchar3 left = src(dst_y, left_x);
+        uchar3 right = src(dst_y, right_x);
+
+        // z,y,x = r,g,b
+        dst(dst_y, dst_x).z = 0.7 * left.y + 0.3 * left.x;
+        dst(dst_y, dst_x).y = right.y;
+        dst(dst_y, dst_x).x = right.x;
+    }
+}
+// anaglyph functions end
+
+// parse anaglyph type
+AnaglyphFunction selectAnaglyphFunction(const char *anaglyphType)
+{
+    if (strcmp(anaglyphType, "true") == 0)
+        return &trueAnaglyph;
+    else if (strcmp(anaglyphType, "gray") == 0)
+        return &grayAnaglyph;
+    else if (strcmp(anaglyphType, "color") == 0)
+        return &colorAnaglyph;
+    else if (strcmp(anaglyphType, "halfColor") == 0)
+        return &halfColorAnaglyph;
+    else if (strcmp(anaglyphType, "optimized") == 0)
+        return &optimizedAnaglyph;
+    else
+        return nullptr;
+}
+
+// =========================================================
 
 __global__ void calcDetCovarianceMatrix(
     const cv::cuda::PtrStep<uchar3> src,
@@ -89,7 +220,7 @@ __global__ void calcDetCovarianceMatrix(
         }
         // 3. calculate determinant
         float det = (Sbb * Sgg * Srr) + 2 * (Sbg * Sbr * Sgr) - (Sbb * Sgr * Sgr + Sgg * Sbr * Sbr + Srr * Sbg * Sbg);
-        // Theoritically, determinant should be divided by the number of pixels 
+        // Theoritically, determinant should be divided by the number of pixels
         // but it is not necessary since we have `gaussianFactorRatio` parameter
         // det /= (squareNeighborSize * squareNeighborSize * squareNeighborSize);
 
@@ -130,6 +261,7 @@ __global__ void applyDynamicGaussianFilter(
         float det = detMatrix(dst_x, dst_y);
         det = min(max(det, 0.05f), 1.0f);
         int kernelSizeDiv2 = int(gaussianFactorRatio / det);
+        kernelSizeDiv2 = clamp(kernelSizeDiv2, 1, 20); // limit kernel size
 
         // 3. convolution
         float3 sum = make_float3(0.0f);
@@ -168,9 +300,11 @@ inline int divUp(int a, int b)
 void processCovarianceCUDA(
     const cv::cuda::GpuMat &src,
     cv::cuda::GpuMat &detMatrix,
-    const int neighborSizeDiv2)
+    const int neighborSizeDiv2,
+    const int blockDimX,
+    const int blockDimY)
 {
-    const dim3 block(32, 8);
+    const dim3 block(blockDimX, blockDimY);
     const dim3 grid(divUp(detMatrix.cols, block.x), divUp(detMatrix.rows, block.y));
 
     calcDetCovarianceMatrix<<<grid, block>>>(
@@ -185,12 +319,14 @@ void processCovarianceCUDA(
 void processGaussianCUDA(
     const cv::cuda::GpuMat &src,
     cv::cuda::GpuMat &dst,
-    cv::cuda::GpuMat &detMatrix,
+    const cv::cuda::GpuMat &detMatrix,
     const float gaussianFactorRatio,
-    const float sigma)
+    const float sigma,
+    const int blockDimX,
+    const int blockDimY)
 {
 
-    const dim3 block(32, 8);
+    const dim3 block(blockDimX, blockDimY);
     const dim3 grid(divUp(dst.cols, block.x), divUp(dst.rows, block.y));
 
     applyDynamicGaussianFilter<<<grid, block>>>(
@@ -205,9 +341,15 @@ void processGaussianCUDA(
     cudaDeviceSynchronize();
 }
 
-void processAnaglyphCUDA(cv::cuda::GpuMat &src, cv::cuda::GpuMat &dst, const AnaglyphFunction &selectedAnaglyph)
+void processAnaglyphCUDA(
+    const cv::cuda::GpuMat &src,
+    cv::cuda::GpuMat &dst,
+    const AnaglyphFunction &selectedAnaglyph,
+    const int blockDimX,
+    const int blockDimY)
+
 {
-    const dim3 block(32, 8);
+    const dim3 block(blockDimX, blockDimY);
     const dim3 grid(divUp(dst.cols, block.x), divUp(dst.rows, block.y));
 
     selectedAnaglyph<<<grid, block>>>(src, dst, dst.rows, dst.cols);
@@ -231,12 +373,8 @@ int main(int argc, char **argv)
     const int neighborSizeDiv2 = atoi(argv[3]);
     const float gaussianFactorRatio = atof(argv[4]);
     const float sigma = atof(argv[5]);
-
-    cout << "             Filename: " << filename << endl;
-    cout << "             Anaglyph: " << anaglyphType << endl;
-    cout << "        Neighbor size: " << neighborSizeDiv2 << endl;
-    cout << "Gaussian factor ratio: " << gaussianFactorRatio << endl;
-    cout << "                Sigma: " << sigma << endl;
+    int blockDimX = 32;
+    int blockDimY = 8;
 
     const AnaglyphFunction selectedAnaglyph = selectAnaglyphFunction(anaglyphType);
 
@@ -246,6 +384,19 @@ int main(int argc, char **argv)
         cout << "anaglyphType: true, gray, color, halfColor, optimized" << endl;
         return -1;
     }
+
+    if (argc > 7)
+    {
+        blockDimX = atoi(argv[5]);
+        blockDimY = atoi(argv[6]);
+    }
+
+    cout << "             Filename: " << filename << endl;
+    cout << "             Anaglyph: " << anaglyphType << endl;
+    cout << "        Neighbor size: " << neighborSizeDiv2 << endl;
+    cout << "Gaussian factor ratio: " << gaussianFactorRatio << endl;
+    cout << "                Sigma: " << sigma << endl;
+    cout << "  Block dim: " << blockDimX << " x " << blockDimY << endl;
 
     const cv::Mat h_src = cv::imread(filename, cv::IMREAD_COLOR);
     cv::Mat h_anaglyph;
@@ -270,16 +421,16 @@ int main(int argc, char **argv)
         d_anaglyph.upload(h_anaglyph);
 
         // calc determinant and normalize
-        processCovarianceCUDA(d_src, d_detMatrix, neighborSizeDiv2);
+        processCovarianceCUDA(d_src, d_detMatrix, neighborSizeDiv2, blockDimX, blockDimY);
         cv::cuda::normalize(d_detMatrix, d_detMatrix, 0.0, 10.0, cv::NORM_MINMAX, -1);
         cout << "det done" << endl;
 
         // apply gaussian filter
-        processGaussianCUDA(d_src, d_gaussian, d_detMatrix, gaussianFactorRatio, sigma);
+        processGaussianCUDA(d_src, d_gaussian, d_detMatrix, gaussianFactorRatio, sigma, blockDimX, blockDimY);
         cout << "gaussian done" << endl;
 
         // apply anaglyph
-        processAnaglyphCUDA(d_gaussian, d_anaglyph, selectedAnaglyph);
+        processAnaglyphCUDA(d_gaussian, d_anaglyph, selectedAnaglyph, blockDimX, blockDimY);
         cout << "anaglyph done" << endl;
 
         d_anaglyph.download(h_anaglyph);
