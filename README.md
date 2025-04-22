@@ -7,13 +7,13 @@ All of exercise codes are available in [`/pw2-omp`](./pw2-omp/) and [`/pw2-cuda`
 1. Exercise 1 – Image processing methods
     1. Anaglyph
         - OpenMP: [`/pw2-omp/ex1-1-anaglyph.cpp`](./pw2-omp/ex1-1-anaglyph.cpp)
-        - CUDA: [`/pw2-cuda/ex2-1-anaglyph.cpp`](./pw2-cuda/ex2-1-anaglyph.cu)
+        - CUDA: [`/pw2-cuda/ex2-1-anaglyph.cu`](./pw2-cuda/ex2-1-anaglyph.cu)
     2. Gaussian Filtering
         - OpenMP: [`/pw2-omp/ex1-2-gaussian.cpp`](./pw2-omp/ex1-2-gaussian.cpp)
-        - CUDA: [`/pw2-cuda/ex2-2-gaussian.cpp`](./pw2-cuda/ex2-2-gaussian.cu)
+        - CUDA: [`/pw2-cuda/ex2-2-gaussian.cu`](./pw2-cuda/ex2-2-gaussian.cu)
     3. Denoising
         - OpenMP: [`/pw2-omp/ex1-3-denoising.cpp`](./pw2-omp/ex1-3-denoising.cpp)
-        - CUDA: [`/pw2-cuda/ex2-3-denoising.cpp`](./pw2-cuda/ex2-3-denoising.cu)
+        - CUDA: [`/pw2-cuda/ex2-3-denoising.cu`](./pw2-cuda/ex2-3-denoising.cu)
 
     - Usage
         - OpenMP
@@ -37,6 +37,8 @@ All of exercise codes are available in [`/pw2-omp`](./pw2-omp/) and [`/pw2-cuda`
 2. Exercise 2 – Shared memory optimization
 
     - **in-progress**
+    - file: [`/pw2-cuda/ex2-4-gaussian-shared-memory.cu`](./pw2-cuda/ex2-4-gaussian-shared-memory.cu)
+
 
 3. Exercise 3 – Execution time comparisons
 
